@@ -3,70 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PENTA | ODYSSEY</title>
+    <title>NEON REVOLT 3D | 120 FPS</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
-        canvas { display: block; filter: contrast(120%) brightness(110%); }
-        
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; }
         #overlay {
-            position: fixed; inset: 0; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; z-index: 10;
-            background: radial-gradient(circle, transparent 0%, #000 100%);
-            transition: 1.5s ease-in-out;
-        }
-        
-        .title-3d {
-            font-size: 3.5rem; color: #fff; letter-spacing: 15px;
-            text-shadow: 0 0 20px #00f2ff, 0 0 40px #bc13fe;
-            animation: pulse 2s infinite alternate; cursor: pointer;
-        }
-
-        #hud {
             position: fixed; top: 20px; left: 20px; color: #00f2ff;
-            font-size: 14px; pointer-events: none; opacity: 0;
+            text-shadow: 0 0 10px #00f2ff; z-index: 100; pointer-events: none;
         }
-
-        @keyframes pulse { from { opacity: 0.4; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        #fps-counter { position: fixed; top: 20px; right: 20px; color: #0f0; font-family: monospace; }
     </style>
 </head>
 <body>
 
-    <div id="overlay" onclick="startEngine()">
-        <div class="title-3d">PENTA</div>
-        <p style="color: rgba(255,255,255,0.4); margin-top: 20px;">انقر لدخول البعد الثالث</p>
+    <div id="overlay">
+        <h2>NEON REVOLT: ODYSSEY</h2>
+        <p>STATUS: HYPER-FLUID MODE</p>
     </div>
+    <div id="fps-counter">FPS: --</div>
 
-    <div id="hud">SYSTEM: ONLINE | POWER: 100% | SCORE: <span id="scr">0</span></div>
-
-    <canvas id="canvas"></canvas>
-
-    <audio id="ambience" loop src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"></audio>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        let stars = [];
-        let score = 0;
-        let active = false;
+        let scene, camera, renderer, player, particles = [];
+        let frames = 0, lastTime = performance.now();
 
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        function init() {
+            // 1. إعداد المشهد والمحرك
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio); // لدعم شاشات 120Hz
+            document.body.appendChild(renderer.domElement);
 
-        class Star {
-            constructor() {
-                this.x = Math.random() * canvas.width - canvas.width / 2;
-                this.y = Math.random() * canvas.height - canvas.height / 2;
-                this.z = Math.random() * canvas.width;
-                this.color = Math.random() > 0.5 ? "#00f2ff" : "#bc13fe";
+            // 2. إضاءة نيونية
+            const light = new THREE.PointLight(0x00f2ff, 2, 100);
+            light.position.set(0, 5, 5);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x404040, 0.5));
+
+            // 3. صنع "الأفاتار" (لاعب 3D مع أنيميشن نبضي)
+            const geometry = new THREE.IcosahedronGeometry(1, 15);
+            const material = new THREE.MeshPhongMaterial({
+                color: 0xbc13fe,
+                wireframe: true,
+                emissive: 0xbc13fe,
+                emissiveIntensity: 0.5
+            });
+            player = new THREE.Mesh(geometry, material);
+            scene.add(player);
+
+            // 4. بناء بيئة "الشبكة العصبية" (Stars/Data Bits)
+            const starGeo = new THREE.BufferGeometry();
+            const starCoords = [];
+            for(let i=0; i<5000; i++) {
+                starCoords.push(THREE.MathUtils.randFloatSpread(200), THREE.MathUtils.randFloatSpread(200), THREE.MathUtils.randFloatSpread(200));
             }
+            starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starCoords, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0x00f2ff, size: 0.1 });
+            const starField = new THREE.Points(starGeo, starMat);
+            scene.add(starField);
 
-            update() {
-                this.z -= 10; // سرعة الاندفاع
-                if (this.z <= 0) {
-                    this.z = canvas.width;
-                    this.x = Math.random() * canvas.width - canvas.width / 2;
-                    this.y = Math.random() * canvas.height - canvas.height / 2;
-                }
+            camera.position.z = 5;
+
+            animate();
+        }
+
+        // 5. محرك الأنيميشن (Optimized for High Refresh Rates)
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const time = performance.now() * 0.001;
+
+            // أنيميشن الأفاتار (دوران وتوسع)
+            player.rotation.y += 0.01;
+            player.rotation.z += 0.01;
+            player.scale.set(
+                1 + Math.sin(time * 5) * 0.1,
+                1 + Math.sin(time * 5) * 0.1,
+                1 + Math.sin(time * 5) * 0.1
+            );
+
+            // تحريك الكاميرا لإعطاء شعور بالعمق 3D
+            camera.position.x = Math.sin(time * 0.5) * 2;
+            camera.lookAt(player.position);
+
+            renderer.render(scene, camera);
+
+            // حساب الـ FPS بدقة
+            frames++;
+            if (performance.now() > lastTime + 1000) {
+                document.getElementById('fps-counter').innerText = `FPS: ${Math.round((frames * 1000) / (performance.now() - lastTime))}`;
+                frames = 0;
+                lastTime = performance.now();
+            }
+        }
+
+        // التجاوب مع حجم الشاشة
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // التحكم باللمس/الماوس لتحريك اللاعب في الفضاء
+        window.addEventListener('mousemove', (e) => {
+            const x = (e.clientX / window.innerWidth) * 2 - 1;
+            const y = -(e.clientY / window.innerHeight) * 2 + 1;
+            player.position.x = x * 3;
+            player.position.y = y * 2;
+        });
+
+        init();
+    </script>
+</body>
+</html>
             }
 
             draw() {
