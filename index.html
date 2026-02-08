@@ -3,70 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>لعبة حسين</title>
+    <title>تحدي حسين: الفوز أو الخسارة</title>
     <style>
-        body { margin: 0; background: #000; color: white; font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; touch-action: manipulation; text-align: center; }
-        #game-screen { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        #score-board { font-size: 2.5rem; color: #00f2ff; text-shadow: 0 0 15px #00f2ff; margin-bottom: 20px; }
-        .hussain-target { 
-            position: absolute; width: 80px; height: 80px; border-radius: 50%; 
-            background: linear-gradient(135deg, #bc13fe, #00f2ff);
-            box-shadow: 0 0 30px #bc13fe; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: bold; font-size: 1.2rem; color: white;
-            transition: transform 0.1s active;
-        }
-        #start-button {
-            padding: 20px 50px; font-size: 1.5rem; background: transparent; 
-            border: 2px solid #00f2ff; color: white; border-radius: 50px; 
-            box-shadow: 0 0 20px #00f2ff; cursor: pointer;
-        }
-        .ripple { position: absolute; border: 2px solid #00f2ff; border-radius: 50%; animation: pulse 0.6s ease-out; pointer-events: none; }
-        @keyframes pulse { from { width: 0; height: 0; opacity: 1; } to { width: 200px; height: 200px; opacity: 0; } }
+        :root { --neon-blue: #00f2ff; --neon-red: #ff0044; --neon-purple: #bc13fe; }
+        body { margin: 0; background: #050505; color: white; font-family: 'Arial', sans-serif; overflow: hidden; touch-action: manipulation; }
+        #game-ui { position: fixed; top: 0; width: 100%; display: flex; justify-content: space-around; padding: 15px; background: rgba(255,255,255,0.05); z-index: 10; font-size: 1.2rem; border-bottom: 1px solid var(--neon-blue); }
+        .target { position: absolute; width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; transition: transform 0.1s; }
+        .hussain { background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple)); box-shadow: 0 0 20px var(--neon-blue); }
+        .enemy { background: var(--neon-red); box-shadow: 0 0 20px var(--neon-red); }
+        #msg-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+        .btn { padding: 15px 40px; font-size: 1.5rem; background: var(--neon-blue); border: none; color: black; border-radius: 50px; cursor: pointer; margin-top: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="game-screen">
-        <div id="score-board">لعبة حسين <br> <span id="points">0</span></div>
-        <button id="start-button" onclick="initHussainGame()">اضغط للبدء</button>
+    <div id="game-ui">
+        <div>النقاط: <span id="score">0</span> / 15</div>
+        <div>الوقت: <span id="timer">20</span>s</div>
     </div>
 
-    <audio id="clickSound" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"></audio>
+    <div id="msg-screen">
+        <h1 id="status-title"></h1>
+        <p id="status-msg"></p>
+        <button class="btn" onclick="resetGame()">حاول مرة أخرى</button>
+    </div>
+
+    <div id="area" style="width:100vw; height:100vh; position:relative;"></div>
 
     <script>
-        let count = 0;
-        const screen = document.getElementById('game-screen');
-        const pointsDisplay = document.getElementById('points');
-        const btn = document.getElementById('start-button');
-        const snd = document.getElementById('clickSound');
+        let score = 0;
+        let timeLeft = 20;
+        let gameTimer;
+        const area = document.getElementById('area');
 
-        function initHussainGame() {
-            btn.style.display = 'none';
-            count = 0;
-            pointsDisplay.innerText = count;
-            createHussain();
+        function startGame() {
+            score = 0;
+            timeLeft = 20;
+            document.getElementById('score').innerText = score;
+            document.getElementById('timer').innerText = timeLeft;
+            document.getElementById('msg-screen').style.display = 'none';
+            
+            gameTimer = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').innerText = timeLeft;
+                if(timeLeft <= 0) endGame(false, "انتهى الوقت! حاول أن تكون أسرع.");
+            }, 1000);
+            
+            spawnStuff();
         }
 
-        function createHussain() {
-            const hussain = document.createElement('div');
-            hussain.className = 'hussain-target';
-            hussain.innerText = 'حسين';
-            
-            const maxX = window.innerWidth - 90;
-            const maxY = window.innerHeight - 150;
-            
-            hussain.style.left = Math.max(10, Math.random() * maxX) + 'px';
-            hussain.style.top = Math.max(100, Math.random() * maxY) + 'px';
-            
-            hussain.onclick = function(e) {
-                count++;
-                pointsDisplay.innerText = count;
-                snd.currentTime = 0;
-                snd.play();
-                
-                // تأثير بصري عند النقر
-                showRipple(e.clientX, e.clientY);
+        function spawnStuff() {
+            area.innerHTML = '';
+            if (timeLeft <= 0) return;
+
+            // ظهور "حسين" (هدف الفوز)
+            createElem('hussain', 'حسين', () => {
+                score++;
+                document.getElementById('score').innerText = score;
+                if(score >= 15) endGame(true, "كفو! فزت في تحدي حسين.");
+                else spawnStuff();
+            });
+
+            // ظهور "العدو" (سبب الخسارة) ابتداءً من السكور 5
+            if(score > 3) {
+                createElem('enemy', 'خطر', () => {
+                    endGame(false, "لمست الخطر! خسرت.");
+                });
+            }
+        }
+
+        function createElem(type, text, action) {
+            const el = document.createElement('div');
+            el.className = 'target ' + type;
+            el.innerText = text;
+            const x = Math.random() * (window.innerWidth - 80);
+            const y = Math.random() * (window.innerHeight - 150) + 100;
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.onclick = action;
+            area.appendChild(el);
+        }
+
+        function endGame(isWin, msg) {
+            clearInterval(gameTimer);
+            const screen = document.getElementById('msg-screen');
+            screen.style.display = 'flex';
+            document.getElementById('status-title').innerText = isWin ? "مبروك!" : "خسرت!";
+            document.getElementById('status-title').style.color = isWin ? "#00f2ff" : "#ff0044";
+            document.getElementById('status-msg').innerText = msg;
+        }
+
+        function resetGame() { startGame(); }
+        
+        // ابدأ اللعبة فوراً
+        startGame();
+    </script>
+</body>
+</html>
                 
                 screen.removeChild(hussain);
                 setTimeout(createHussain, 100); 
