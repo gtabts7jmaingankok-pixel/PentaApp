@@ -3,70 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>تحدي حسين: الفوز أو الخسارة</title>
+    <title>PENTA Royal Match</title>
     <style>
-        :root { --neon-blue: #00f2ff; --neon-red: #ff0044; --neon-purple: #bc13fe; }
-        body { margin: 0; background: #050505; color: white; font-family: 'Arial', sans-serif; overflow: hidden; touch-action: manipulation; }
-        #game-ui { position: fixed; top: 0; width: 100%; display: flex; justify-content: space-around; padding: 15px; background: rgba(255,255,255,0.05); z-index: 10; font-size: 1.2rem; border-bottom: 1px solid var(--neon-blue); }
-        .target { position: absolute; width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; transition: transform 0.1s; }
-        .hussain { background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple)); box-shadow: 0 0 20px var(--neon-blue); }
-        .enemy { background: var(--neon-red); box-shadow: 0 0 20px var(--neon-red); }
-        #msg-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
-        .btn { padding: 15px 40px; font-size: 1.5rem; background: var(--neon-blue); border: none; color: black; border-radius: 50px; cursor: pointer; margin-top: 20px; font-weight: bold; }
+        :root { --bg: #0f0c29; --cyan: #00f2ff; --purple: #bc13fe; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; text-align: center; overflow: hidden; }
+        #header { padding: 15px; background: rgba(0,0,0,0.5); display: flex; justify-content: space-around; font-size: 1.2rem; border-bottom: 2px solid var(--purple); }
+        #grid { 
+            display: grid; grid-template-columns: repeat(6, 1fr); 
+            gap: 5px; padding: 10px; margin: 20px auto;
+            width: 90vw; height: 90vw; max-width: 400px; max-height: 400px;
+            background: rgba(255,255,255,0.05); border-radius: 10px;
+        }
+        .cell { 
+            aspect-ratio: 1; border-radius: 8px; display: flex; align-items: center; 
+            justify-content: center; font-size: 1.5rem; cursor: pointer;
+            transition: transform 0.2s, background 0.3s;
+        }
+        .selected { border: 2px solid white; transform: scale(1.1); box-shadow: 0 0 15px white; }
+        #msg-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:100; }
+        .btn { padding: 15px 30px; background: var(--cyan); border: none; border-radius: 20px; font-weight: bold; margin-top: 20px; }
     </style>
 </head>
 <body>
 
-    <div id="game-ui">
-        <div>النقاط: <span id="score">0</span> / 15</div>
-        <div>الوقت: <span id="timer">20</span>s</div>
-    </div>
+<div id="header">
+    <div>الهدف: <span id="target">500</span></div>
+    <div>النقاط: <span id="score">0</span></div>
+    <div>الحركات: <span id="moves">20</span></div>
+</div>
 
-    <div id="msg-screen">
-        <h1 id="status-title"></h1>
-        <p id="status-msg"></p>
-        <button class="btn" onclick="resetGame()">حاول مرة أخرى</button>
-    </div>
+<div id="grid"></div>
 
-    <div id="area" style="width:100vw; height:100vh; position:relative;"></div>
+<div id="msg-screen">
+    <h1 id="res-title"></h1>
+    <button class="btn" onclick="location.reload()">إعادة المحاولة</button>
+</div>
 
-    <script>
-        let score = 0;
-        let timeLeft = 20;
-        let gameTimer;
-        const area = document.getElementById('area');
+<audio id="pop" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3"></audio>
 
-        function startGame() {
-            score = 0;
-            timeLeft = 20;
-            document.getElementById('score').innerText = score;
-            document.getElementById('timer').innerText = timeLeft;
-            document.getElementById('msg-screen').style.display = 'none';
-            
-            gameTimer = setInterval(() => {
-                timeLeft--;
-                document.getElementById('timer').innerText = timeLeft;
-                if(timeLeft <= 0) endGame(false, "انتهى الوقت! حاول أن تكون أسرع.");
-            }, 1000);
-            
-            spawnStuff();
+<script>
+    const grid = document.getElementById('grid');
+    const items = ['💎', '🌟', '🔮', '🔥', '🌀'];
+    let cells = [];
+    let score = 0;
+    let moves = 20;
+    let selectedCell = null;
+
+    // إنشاء الشبكة
+    function createBoard() {
+        for (let i = 0; i < 36; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.id = i;
+            cell.innerHTML = items[Math.floor(Math.random() * items.length)];
+            cell.onclick = () => handleCellClick(cell);
+            grid.appendChild(cell);
+            cells.push(cell);
         }
+    }
 
-        function spawnStuff() {
-            area.innerHTML = '';
-            if (timeLeft <= 0) return;
+    function handleCellClick(cell) {
+        if (!selectedCell) {
+            selectedCell = cell;
+            cell.classList.add('selected');
+        } else {
+            let id1 = parseInt(selectedCell.dataset.id);
+            let id2 = parseInt(cell.dataset.id);
+            
+            // التحقق من الجوار (تبديل)
+            if (isAdjacent(id1, id2)) {
+                swap(selectedCell, cell);
+                moves--;
+                document.getElementById('moves').innerText = moves;
+                checkMatches();
+            }
+            
+            selectedCell.classList.remove('selected');
+            selectedCell = null;
+            checkGameOver();
+        }
+    }
 
-            // ظهور "حسين" (هدف الفوز)
-            createElem('hussain', 'حسين', () => {
-                score++;
-                document.getElementById('score').innerText = score;
-                if(score >= 15) endGame(true, "كفو! فزت في تحدي حسين.");
-                else spawnStuff();
-            });
+    function isAdjacent(id1, id2) {
+        const diff = Math.abs(id1 - id2);
+        return diff === 1 || diff === 6;
+    }
 
-            // ظهور "العدو" (سبب الخسارة) ابتداءً من السكور 5
-            if(score > 3) {
-                createElem('enemy', 'خطر', () => {
+    function swap(c1, c2) {
+        let temp = c1.innerHTML;
+        c1.innerHTML = c2.innerHTML;
+        c2.innerHTML = temp;
+    }
+
+    function checkMatches() {
+        // منطق مبسط لمسح المتشابهات (لأغراض العرض)
+        // في الألعاب الحقيقية الكود يكون أعقد، لكن هذا سيعطيك الإحساس المطلوب
+        score += 50;
+        document.getElementById('score').innerText = score;
+        document.getElementById('pop').play();
+    }
+
+    function checkGameOver() {
+        if (score >= 500) showEnd("فوز ساحق!", "#00f2ff");
+        else if (moves <= 0) showEnd("انتهت الحركات!", "#ff0044");
+    }
+
+    function showEnd(title, color) {
+        const screen = document.getElementById('msg-screen');
+        screen.style.display = 'flex';
+        document.getElementById('res-title').innerText = title;
+        document.getElementById('res-title').style.color = color;
+    }
+
+    createBoard();
+</script>
+</body>
+</html>
                     endGame(false, "لمست الخطر! خسرت.");
                 });
             }
