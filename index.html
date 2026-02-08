@@ -3,70 +3,152 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NEON REVOLT 3D | 120 FPS</title>
+    <title>Neon Fighter 3D</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; }
-        #overlay {
-            position: fixed; top: 20px; left: 20px; color: #00f2ff;
-            text-shadow: 0 0 10px #00f2ff; z-index: 100; pointer-events: none;
-        }
-        #fps-counter { position: fixed; top: 20px; right: 20px; color: #0f0; font-family: monospace; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+        #game-ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; color: #0ff; font-size: 20px; pointer-events: none; z-index: 10; }
+        #instructions { position: absolute; bottom: 20px; width: 100%; text-align: center; color: white; font-size: 14px; opacity: 0.7; }
+        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; background: rgba(0,0,0,0.85); flex-direction: column; justify-content: center; align-items: center; color: white; z-index: 100; }
+        button { padding: 15px 40px; background: #0ff; border: none; font-weight: bold; font-size: 20px; cursor: pointer; box-shadow: 0 0 20px #0ff; border-radius: 50px; }
     </style>
 </head>
 <body>
 
-    <div id="overlay">
-        <h2>NEON REVOLT: ODYSSEY</h2>
-        <p>STATUS: HYPER-FLUID MODE</p>
+    <div id="game-ui">
+        <div>النقاط: <span id="score">0</span></div>
+        <div>الطاقة: <span id="health">100</span>%</div>
     </div>
-    <div id="fps-counter">FPS: --</div>
+
+    <div id="instructions">المس الشاشة للتحرك والإطلاق تلقائي</div>
+
+    <div id="overlay">
+        <h1 id="msg">تحطمت السفينة!</h1>
+        <button onclick="location.reload()">إعادة تشغيل</button>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        let scene, camera, renderer, player, particles = [];
-        let frames = 0, lastTime = performance.now();
+        let scene, camera, renderer, ship, stars;
+        let bullets = [], enemies = [], particles = [];
+        let score = 0, health = 100, gameActive = true;
 
         function init() {
-            // 1. إعداد المشهد والمحرك
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            camera.position.z = 12;
+            camera.position.y = 3;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio); // لدعم شاشات 120Hz
+            renderer.setPixelRatio(window.devicePixelRatio);
             document.body.appendChild(renderer.domElement);
 
-            // 2. إضاءة نيونية
-            const light = new THREE.PointLight(0x00f2ff, 2, 100);
-            light.position.set(0, 5, 5);
-            scene.add(light);
-            scene.add(new THREE.AmbientLight(0x404040, 0.5));
-
-            // 3. صنع "الأفاتار" (لاعب 3D مع أنيميشن نبضي)
-            const geometry = new THREE.IcosahedronGeometry(1, 15);
-            const material = new THREE.MeshPhongMaterial({
-                color: 0xbc13fe,
-                wireframe: true,
-                emissive: 0xbc13fe,
-                emissiveIntensity: 0.5
-            });
-            player = new THREE.Mesh(geometry, material);
-            scene.add(player);
-
-            // 4. بناء بيئة "الشبكة العصبية" (Stars/Data Bits)
+            // إضافة النجوم في الخلفية
             const starGeo = new THREE.BufferGeometry();
             const starCoords = [];
             for(let i=0; i<5000; i++) {
-                starCoords.push(THREE.MathUtils.randFloatSpread(200), THREE.MathUtils.randFloatSpread(200), THREE.MathUtils.randFloatSpread(200));
+                starCoords.push((Math.random()-0.5)*1000, (Math.random()-0.5)*1000, (Math.random()-0.5)*1000);
             }
             starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starCoords, 3));
-            const starMat = new THREE.PointsMaterial({ color: 0x00f2ff, size: 0.1 });
-            const starField = new THREE.Points(starGeo, starMat);
-            scene.add(starField);
+            stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xffffff, size: 0.7}));
+            scene.add(stars);
 
-            camera.position.z = 5;
+            // إنشاء السفينة (لاعب)
+            const shipGroup = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2, 8), new THREE.MeshPhongMaterial({color: 0x00ffff, emissive: 0x004444}));
+            body.rotation.x = Math.PI / 2;
+            shipGroup.add(body);
+            ship = shipGroup;
+            scene.add(ship);
 
+            // إضاءة
+            const light = new THREE.PointLight(0xffffff, 1, 100);
+            light.position.set(0, 10, 10);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x333333));
+
+            window.addEventListener('touchmove', handleTouch);
+            setInterval(spawnEnemy, 1500);
+            setInterval(autoShoot, 400);
+            animate();
+        }
+
+        function autoShoot() {
+            if(!gameActive) return;
+            const b = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshBasicMaterial({color: 0xffff00}));
+            b.position.set(ship.position.x, ship.position.y, ship.position.z - 1);
+            scene.add(b);
+            bullets.push(b);
+        }
+
+        function spawnEnemy() {
+            if(!gameActive) return;
+            const enemy = new THREE.Mesh(new THREE.OctahedronGeometry(0.8), new THREE.MeshPhongMaterial({color: 0xff0066}));
+            enemy.position.set((Math.random()-0.5)*20, (Math.random()-0.5)*10, -50);
+            scene.add(enemy);
+            enemies.push(enemy);
+        }
+
+        function handleTouch(e) {
+            if(!gameActive) return;
+            let x = (e.touches[0].clientX / window.innerWidth) * 2 - 1;
+            let y = -(e.touches[0].clientY / window.innerHeight) * 2 + 1;
+            ship.position.x = x * 10;
+            ship.position.y = y * 5;
+            camera.position.x = ship.position.x * 0.3;
+        }
+
+        function animate() {
+            if(!gameActive) return;
+            requestAnimationFrame(animate);
+
+            stars.rotation.z += 0.001;
+
+            // تحريك الرصاص
+            bullets.forEach((b, i) => {
+                b.position.z -= 1;
+                if(b.position.z < -60) { scene.remove(b); bullets.splice(i, 1); }
+            });
+
+            // تحريك الأعداء والاصطدام
+            enemies.forEach((en, i) => {
+                en.position.z += 0.4 + (score * 0.001);
+                en.rotation.y += 0.05;
+
+                // اصطدام مع الرصاص
+                bullets.forEach((b, bi) => {
+                    if(en.position.distanceTo(b.position) < 1) {
+                        scene.remove(en); enemies.splice(i, 1);
+                        scene.remove(b); bullets.splice(bi, 1);
+                        score += 10;
+                        document.getElementById('score').innerText = score;
+                    }
+                });
+
+                // اصطدام مع اللاعب
+                if(en.position.distanceTo(ship.position) < 1.2) {
+                    health -= 20;
+                    document.getElementById('health').innerText = health;
+                    scene.remove(en); enemies.splice(i, 1);
+                    if(health <= 0) gameOver();
+                }
+
+                if(en.position.z > 15) { scene.remove(en); enemies.splice(i, 1); }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        function gameOver() {
+            gameActive = false;
+            document.getElementById('overlay').style.display = 'flex';
+        }
+
+        init();
+    </script>
+</body>
+</html>
             animate();
         }
 
