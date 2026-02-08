@@ -1,72 +1,130 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PENTA ROYAL</title>
+    <title>PENTA | ODYSSEY</title>
     <style>
-        :root { --gold: #ffd700; --royal-blue: #1a237e; --neon-cyan: #00f2ff; }
-        body { margin: 0; background: #0f0c29; color: white; font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; filter: contrast(120%) brightness(110%); }
         
-        /* شاشة التحميل (مثل رويال ماتش) */
-        #splash { position: fixed; inset: 0; background: linear-gradient(to bottom, #1a237e, #0f0c29); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .loader { width: 200px; height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; margin-top: 20px; overflow: hidden; }
-        .progress { width: 0%; height: 100%; background: var(--gold); transition: 2s linear; }
-
-        /* واجهة اللعب */
-        #game-ui { display: none; height: 100vh; flex-direction: column; }
-        .header { height: 80px; background: rgba(0,0,0,0.4); display: flex; justify-content: space-around; align-items: center; border-bottom: 3px solid var(--gold); }
-        .stat-card { background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 10px; text-align: center; }
+        #overlay {
+            position: fixed; inset: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 10;
+            background: radial-gradient(circle, transparent 0%, #000 100%);
+            transition: 1.5s ease-in-out;
+        }
         
-        #grid { 
-            display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; 
-            padding: 15px; margin: auto; width: 90vw; height: 90vw; max-width: 400px; 
-            background: rgba(255,255,255,0.05); border-radius: 20px; box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        .title-3d {
+            font-size: 3.5rem; color: #fff; letter-spacing: 15px;
+            text-shadow: 0 0 20px #00f2ff, 0 0 40px #bc13fe;
+            animation: pulse 2s infinite alternate; cursor: pointer;
         }
-        .gem { 
-            aspect-ratio: 1; border-radius: 12px; display: flex; align-items: center; 
-            justify-content: center; font-size: 1.8rem; cursor: pointer; background: rgba(255,255,255,0.03);
-            transition: 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        .gem:active { transform: scale(0.8); }
-        .selected { outline: 3px solid var(--gold); box-shadow: 0 0 20px var(--gold); z-index: 10; }
 
-        /* شاشات الفوز والخسارة */
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 500; }
-        .overlay h1 { font-size: 3rem; margin: 0; text-shadow: 0 0 20px var(--gold); }
-        .btn-retry { margin-top: 20px; padding: 15px 40px; background: var(--gold); border: none; border-radius: 30px; font-weight: bold; font-size: 1.2rem; cursor: pointer; }
+        #hud {
+            position: fixed; top: 20px; left: 20px; color: #00f2ff;
+            font-size: 14px; pointer-events: none; opacity: 0;
+        }
+
+        @keyframes pulse { from { opacity: 0.4; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body>
 
-    <div id="splash">
-        <h1 style="color: var(--gold); letter-spacing: 5px;">PENTA ROYAL</h1>
-        <div class="loader"><div class="progress" id="p-bar"></div></div>
-        <p style="margin-top: 10px; opacity: 0.7;">جاري تحضير المملكة...</p>
+    <div id="overlay" onclick="startEngine()">
+        <div class="title-3d">PENTA</div>
+        <p style="color: rgba(255,255,255,0.4); margin-top: 20px;">انقر لدخول البعد الثالث</p>
     </div>
 
-    <div id="game-ui">
-        <div class="header">
-            <div class="stat-card"><small>الهدف</small><br><b style="color: var(--gold);">500</b></div>
-            <div class="stat-card"><small>النقاط</small><br><b id="score">0</b></div>
-            <div class="stat-card"><small>الحركات</small><br><b id="moves" style="color: var(--neon-cyan);">20</b></div>
-        </div>
-        <div id="grid"></div>
-    </div>
+    <div id="hud">SYSTEM: ONLINE | POWER: 100% | SCORE: <span id="scr">0</span></div>
 
-    <div id="result-screen" class="overlay">
-        <h1 id="result-title">فوز ملكي!</h1>
-        <p id="result-msg"></p>
-        <button class="btn-retry" onclick="location.reload()">العب مجدداً</button>
-    </div>
+    <canvas id="canvas"></canvas>
 
-    <audio id="sound-pop" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3"></audio>
+    <audio id="ambience" loop src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"></audio>
 
     <script>
-        const gems = ['💎', '👑', '🍎', '🛡️', '💰'];
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let stars = [];
         let score = 0;
-        let moves = 20;
-        let selected = null;
+        let active = false;
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        class Star {
+            constructor() {
+                this.x = Math.random() * canvas.width - canvas.width / 2;
+                this.y = Math.random() * canvas.height - canvas.height / 2;
+                this.z = Math.random() * canvas.width;
+                this.color = Math.random() > 0.5 ? "#00f2ff" : "#bc13fe";
+            }
+
+            update() {
+                this.z -= 10; // سرعة الاندفاع
+                if (this.z <= 0) {
+                    this.z = canvas.width;
+                    this.x = Math.random() * canvas.width - canvas.width / 2;
+                    this.y = Math.random() * canvas.height - canvas.height / 2;
+                }
+            }
+
+            draw() {
+                let sx = (this.x / this.z) * canvas.width + canvas.width / 2;
+                let sy = (this.y / this.z) * canvas.height + canvas.height / 2;
+                let r = (1 - this.z / canvas.width) * 3;
+
+                ctx.beginPath();
+                ctx.arc(sx, sy, r, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                
+                // إضافة وهج لكل نجمة
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+            }
+        }
+
+        function init() {
+            for (let i = 0; i < 600; i++) stars.push(new Star());
+        }
+
+        function animate() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.2)"; // تأثير الذيل (Trail)
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            stars.forEach(star => {
+                star.update();
+                star.draw();
+            });
+
+            if(active) {
+                score++;
+                document.getElementById('scr').innerText = score;
+            }
+            requestAnimationFrame(animate);
+        }
+
+        function startEngine() {
+            active = true;
+            document.getElementById('overlay').style.opacity = '0';
+            document.getElementById('hud').style.opacity = '1';
+            document.getElementById('ambience').play();
+            setTimeout(() => {
+                document.getElementById('overlay').style.display = 'none';
+            }, 1500);
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        init();
+        animate();
+    </script>
+</body>
+</html>
 
         // تأثير التحميل عند الدخول
         window.onload = () => {
